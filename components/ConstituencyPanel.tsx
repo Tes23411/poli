@@ -172,7 +172,7 @@ export const ConstituencyPanel: React.FC<ConstituencyPanelProps> = ({ seat, demo
                         </div>
                     )}
 
-                    {/* Ethnic Composition */}
+{/* Ethnic Composition */}
                     {demographics && (
                         <div className="bg-gray-700/30 p-4 rounded-lg">
                             <h3 className="text-md font-bold mb-3 text-gray-200 flex justify-between items-end">
@@ -201,6 +201,39 @@ export const ConstituencyPanel: React.FC<ConstituencyPanelProps> = ({ seat, demo
                                     </div>
                                     <ProgressBar value={demographics.indianPercent} color="#f58231" />
                                 </div>
+                                
+                                {/* NEW: North Bornean Natives (Only show if present) */}
+                                {demographics.northBorneanNativesPercent > 0 && (
+                                    <div>
+                                        <div className="flex justify-between mb-1 text-xs">
+                                            <span className="text-gray-300">North Bornean</span>
+                                            <span className="text-gray-300">{demographics.northBorneanNativesPercent.toFixed(1)}%</span>
+                                        </div>
+                                        <ProgressBar value={demographics.northBorneanNativesPercent} color="#4363d8" />
+                                    </div>
+                                )}
+
+                                {/* NEW: Sarawak Natives (Only show if present) */}
+                                {demographics.sarawakNativesPercent > 0 && (
+                                    <div>
+                                        <div className="flex justify-between mb-1 text-xs">
+                                            <span className="text-gray-300">Sarawak Native</span>
+                                            <span className="text-gray-300">{demographics.sarawakNativesPercent.toFixed(1)}%</span>
+                                        </div>
+                                        <ProgressBar value={demographics.sarawakNativesPercent} color="#911eb4" />
+                                    </div>
+                                )}
+
+                                {/* Others (Only show if present) */}
+                                {demographics.othersPercent > 0 && (
+                                    <div>
+                                        <div className="flex justify-between mb-1 text-xs">
+                                            <span className="text-gray-300">Others</span>
+                                            <span className="text-gray-300">{demographics.othersPercent.toFixed(1)}%</span>
+                                        </div>
+                                        <ProgressBar value={demographics.othersPercent} color="#a9a9a9" />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}

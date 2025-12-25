@@ -1,18 +1,13 @@
-
 import { Demographics } from '../types';
 
 function toCamelCase(str: string): string {
   return str
     .trim()
     .toLowerCase()
-    // "malay (%)" -> "malay percent"
     .replace(new RegExp('\\s*\\(%\\)'), ' percent')
-    // "classification (1947)" -> "classification"
     .replace(new RegExp('\\s*\\([^)]*\\)'), '')
-    // "malay percent" -> "malayPercent", "unique code" -> "uniqueCode"
     .replace(new RegExp('[^a-zA-Z0-9]+(.)?', 'g'), (_match, chr) => chr ? chr.toUpperCase() : '');
 }
-
 
 export const loadDemographicsData = async (): Promise<Demographics[]> => {
   try {
@@ -35,11 +30,34 @@ export const loadDemographicsData = async (): Promise<Demographics[]> => {
       const entry: { [key: string]: string | number } = {};
       
       headers.forEach((key, index) => {
-        if (!key) return; // Skip empty headers that might result from parsing
+        if (!key) return;
         const value = values[index] ? values[index].trim() : '';
         const numValue = parseFloat(value);
         entry[key] = isNaN(numValue) || value.trim() === '' ? value : numValue;
       });
+
+      // --- NEW LOGIC START ---
+      // Separate Others into specific native groups based on State
+      let others = (entry['othersPercent'] as number) || 0;
+      let northBornean = 0;
+      let sarawakNative = 0;
+
+      const state = (entry['state'] as string)?.toUpperCase();
+
+      if (state === 'SABAH') {
+          northBornean = others;
+          others = 0; // Assuming largely native, or you can keep a small residual percentage for actual 'others'
+      } else if (state === 'SARAWAK') {
+          sarawakNative = others;
+          others = 0;
+      }
+
+      // Assign back to entry
+      entry['othersPercent'] = others;
+      entry['northBorneanNativesPercent'] = northBornean;
+      entry['sarawakNativesPercent'] = sarawakNative;
+      // --- NEW LOGIC END ---
+
       return entry as unknown as Demographics;
     });
 

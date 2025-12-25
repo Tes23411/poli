@@ -8,20 +8,30 @@ const MALAY_GIVEN_NAMES_FEMALE = ['Siti', 'Fatima', 'Nur', 'Zainab', 'Aminah', '
 const CHINESE_SURNAMES = ['Tan', 'Lee', 'Wong', 'Lim', 'Chan', 'Ng', 'Goh', 'Ong', 'Teo', 'Yap', 'Lau', 'Wee', 'Chong', 'Low'];
 const CHINESE_GIVEN_NAMES = ['Wei', 'Mei', 'Chen', 'Li', 'Jian', 'Ling', 'Hui', 'Jin', 'Ming', 'Xiao', 'Ah', 'Kim', 'Seng', 'Hock', 'Keong'];
 
-const INDIGENOUS_SURNAMES = [
-  // Sabah
-  'Tudan', 'Mojilip', 'Damit', 'Lasimbang', 'Siambun', 'Ginibun', 'Gimbad', 
-  'Gantuong', 'Mandimin', 'Sumping',
-  // Sarawak (Iban often use "anak" + father's name)
-  'Jugah', 'Jinggut', 'Riboh', 'Munan', 'Masing', 'Baki', 'Numpang'
+// --- North Borneo (Sabah) Naming ---
+// Focus on Kadazan-Dusun, Murut, and Bajau conventions
+// Structure: often [Christian/Western Name] [Native Surname] or [Native Name] [Native Surname]
+const NB_SURNAMES = [
+  'Kitingan', 'Mojilip', 'Lasimbang', 'Dompok', 'Stephens', 'Gimbad', 
+  'Sundang', 'Ongkili', 'Majakun', 'Intang', 'Gilod', 'Mandimin', 
+  'Pasok', 'Rimba', 'Sumping', 'Bolungkit', 'Gisang'
+];
+const NB_GIVEN_MALE = [
+  'Joseph', 'Peter', 'Donald', 'Jeffrey', 'Herman', 'Maximus', 
+  'Wilfred', 'Clarence', 'Huguan', 'Ganie', 'Fuad', 'Mustapha', 'Sakaran'
+];
+const NB_GIVEN_FEMALE = [
+  'Jenifer', 'Mary', 'Elizabeth', 'Catherine', 'Rita', 'Joanna', 'Dayang', 'Nora'
 ];
 
-const INDIGENOUS_GIVEN_NAMES = [
-  'Jovita', 'Janelle', 'Julius', 'Jeffrey', 'Dayang', 'Awang',
-  'Empiang', 'Chambai', 'Remy', 'Nicholas', 'Jennifer', 'Jabu', 
-  'Salang', 'Rentap'
+// --- Sarawak Naming ---
+// Focus on Iban, Bidayuh, Orang Ulu
+// Structure: often [Name] anak [Father's Name] (ak)
+const SWK_DAYAK_NAMES = [
+  'Jugah', 'Ningkan', 'Langgu', 'Masing', 'Barieng', 'Jabu', 'Mawan', 
+  'Entulu', 'Rentap', 'Kalong', 'Gerawat', 'Balan', 'Sajem', 'Numpang',
+  'Jinggut', 'Riboh', 'Munan', 'Baki', 'Sandin', 'Gerunsin'
 ];
-
 const INDIAN_GIVEN_NAMES_MALE = ['Ravi', 'Kumar', 'Suresh', 'Rajesh', 'Mani', 'Arjun', 'Ganesh', 'Muthu', 'Raju', 'Sambanthan', 'Manickam'];
 const INDIAN_GIVEN_NAMES_FEMALE = ['Priya', 'Anjali', 'Deepa', 'Lakshmi', 'Sita', 'Parvathi', 'Geetha', 'Kamala', 'Devi'];
 const INDIAN_PATRONYMS = ['Krishnan', 'Singh', 'Pillai', 'Rao', 'Naidu', 'Murthy', 'Subramaniam', 'Ramasamy', 'Menon'];
@@ -43,10 +53,33 @@ export const generateCharacterName = (ethnicity: Ethnicity): string => {
         return `${givenName} binti ${fatherName}`;
       }
     }
-    case 'Others' : {
-      const surname = randomElement(INDIGENOUS_SURNAMES);
-      const givenName= randomElement(INDIGENOUS_GIVEN_NAMES);
-        return `${surname} ${givenName}`;
+case 'North Bornean natives': {
+        const surname = randomElement(NB_SURNAMES);
+        if (isMale) {
+            const givenName = randomElement(NB_GIVEN_MALE);
+            // Occasional "bin" format for Muslim natives in Sabah (Bajau/Suluk style mixed in)
+            if (['Mustapha', 'Sakaran', 'Fuad'].includes(givenName)) {
+                 return `Datu ${givenName} bin Datu ${randomElement(NB_GIVEN_MALE)}`; // Add Datu title for flavor
+            }
+            return `${givenName} ${surname}`;
+        } else {
+            const givenName = randomElement(NB_GIVEN_FEMALE);
+            return `${givenName} ${surname}`;
+        }
+    }
+
+    case 'Sarawak natives': {
+        // Dayak "anak" naming convention
+        const fatherName = randomElement(SWK_DAYAK_NAMES);
+        const childName = randomElement(SWK_DAYAK_NAMES.filter(n => n !== fatherName));
+        
+        if (isMale) {
+             return `${childName} anak ${fatherName}`;
+        } else {
+            // Female names might be distinct or share some pool, simplified here or use 'daughter of' logic if we had distinct female Dayak names
+            const femaleName = randomElement(['Fatima', 'Doris', 'Elizabeth', 'Barbara', 'Catherine']); 
+            return `${femaleName} anak ${fatherName}`;
+        }
     }
     case 'Chinese': {
       const surname = randomElement(CHINESE_SURNAMES);

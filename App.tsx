@@ -193,7 +193,7 @@ const App: React.FC = () => {
   const [mergerMode, setMergerMode] = useState<UnificationMode>('merge');
 
   // State to track if we've run the post-election AI strategy for the current cycle
-  const [hasRunPostElectionStrategy, setHasRunPostElectionStrategy] = useState(false);
+  const [hasRunPreElectionStrategy, setHasRunPreElectionStrategy] = useState(false);
   
   // State to track player actions per election cycle
   const [hasPlayerManagedStrategy, setHasPlayerManagedStrategy] = useState(false);
@@ -298,9 +298,17 @@ const App: React.FC = () => {
     if (gameState !== 'game') return;
 
     // Enforce speed restriction close to election
-    const daysUntil = Math.ceil((nextElectionDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
+const daysUntil = Math.ceil((nextElectionDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24));
     if (daysUntil <= 20 && playSpeed !== null && playSpeed < 125) {
         setPlaySpeed(125);
+    }
+
+    // --- INSERT THIS BLOCK ---
+    // Trigger Pre-Election Strategy (Seat Allocation & Candidate Selection) at 20 days out
+    if (daysUntil === 20 && !hasRunPreElectionStrategy) {
+         runAIStrategies(); 
+         setHasRunPreElectionStrategy(true);
+         addToLog('Election Season', 'Parties and Alliances have finalized their seat allocations and candidate lists.', 'election');
     }
 
     setCurrentDate(prevDate => {
@@ -314,7 +322,7 @@ const App: React.FC = () => {
          // Defer execution to avoid state update conflicts in loop
          setTimeout(() => {
              handleGeneralElection(nextDate);
-             setHasRunPostElectionStrategy(false);
+             setHasRunPreElectionStrategy(false);
          }, 0);
       }
       
@@ -508,9 +516,9 @@ const App: React.FC = () => {
     const lastEventDate = electionHistory.length > 0 ? electionHistory[electionHistory.length - 1].date : START_DATE;
     const daysSinceLastEvent = Math.floor((currentDate.getTime() - lastEventDate.getTime()) / (1000 * 60 * 60 * 24));
     
-    if (daysSinceLastEvent === 21 && !hasRunPostElectionStrategy) {
+    if (daysSinceLastEvent === 21 && !hasRunPreElectionStrategy) {
         runAIStrategies();
-        setHasRunPostElectionStrategy(true);
+        setHasRunPreElectionStrategy(true);
     }
     
     // Periodically refresh affiliation leaders (e.g., every 30 days)
@@ -1033,7 +1041,7 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
           if (consolidationProcessed.has(weakP.id)) continue;
           
           // 2% chance per update tick
-          if (Math.random() > 0.02) continue;
+          if (Math.random() > 0.0002) continue;
 
           // Find best partner
           let target: Party | null = null;
@@ -1209,15 +1217,18 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
 
   const runAIStrategies = () => {
       let currentPartiesMap = new Map(parties.map(p => [p.id, p]));
-      const allianceMap = new Map<string, string>(); 
       
+      // Map to track which parties are in alliances (to skip their own seat targeting logic)
+      const allianceMap = new Map<string, string>(); 
       alliances.forEach(a => {
           a.memberPartyIds.forEach(pid => allianceMap.set(pid, a.id));
       });
 
       const processedPartyIds = new Set<string>();
 
-      // 1. Process Alliances: Distribute seats to avoid friendly fire
+      // --- STEP 1: ALLIANCE SEAT ALLOCATION ---
+      // Distribute seats to avoid friendly fire within alliances
+      // This resets their contested seats and assigns them based on calculated scores
       alliances.forEach(alliance => {
           const members = alliance.memberPartyIds.map(id => currentPartiesMap.get(id)).filter(Boolean) as Party[];
           if (members.length > 0) {
@@ -1239,7 +1250,7 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
           }
       });
 
-      // 2. Run Individual AI Strategy
+      // --- STEP 2: INDIVIDUAL PARTY STRATEGY & CANDIDATE FIELDING ---
       let finalParties = Array.from(currentPartiesMap.values());
       let updatedCharacters = [...characters];
 
@@ -1247,15 +1258,23 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
           let skipStrategy = false;
           const skipAffiliationIds: string[] = [];
 
+          // Skip full strategy if this is the player's party and they are the leader
+          // (Player manages their own strategy via the UI)
           if (playerParty && party.id === playerParty.id && playerCharacter) {
               if (playerCharacter.id === party.leaderId) skipStrategy = true;
               if (playerCharacter.isAffiliationLeader) skipAffiliationIds.push(playerCharacter.affiliationId);
           }
           
+          // If party is in an alliance, we skip the "Targeting" phase (aiManagePartyContests)
+          // because Step 1 already decided which seats they get.
+          // However, we STILL run aiFullElectionStrategy because it handles Candidate Selection.
           if (allianceMap.has(party.id) && !skipStrategy) {
              skipStrategy = true; 
           }
 
+          // Run Strategy
+          // - If skipStrategy is TRUE: It skips picking seats, but DOES pick candidates.
+          // - If skipStrategy is FALSE: It picks seats AND candidates.
           const { updatedParty, historyUpdates } = aiFullElectionStrategy(
               party,
               updatedCharacters,
@@ -1269,6 +1288,7 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
               skipAffiliationIds
           );
           
+          // Apply history logs (e.g. "Selected as candidate...")
           historyUpdates.forEach(update => {
               const charIndex = updatedCharacters.findIndex(c => c.id === update.charId);
               if (charIndex !== -1) {
@@ -1308,7 +1328,9 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
                 if (affiliation.ethnicity === 'Malay') populationPercent = demographics.malayPercent;
                 else if (affiliation.ethnicity === 'Chinese') populationPercent = demographics.chinesePercent;
                 else if (affiliation.ethnicity === 'Indian') populationPercent = demographics.indianPercent;
-                else if (affiliation.ethnicity === 'Others') populationPercent = demographics.othersPercent;
+                else if (affiliation.ethnicity === 'North Bornean natives') populationPercent = demographics.northBorneanNativesPercent;
+                else if (affiliation.ethnicity === 'Sarawak natives') populationPercent = demographics.sarawakNativesPercent;
+
                 
                 if (populationPercent < 0.5) {
                     continue;
@@ -1459,6 +1481,7 @@ const canAffiliationJoinParty = (affiliation: Affiliation, party: Party): boolea
     setGovernment(null);
     setHasPlayerManagedStrategy(false);
     setHasPlayerManagedAffiliation(false);
+    setHasRunPreElectionStrategy(false);
     
     // Force Move Candidates to Seats
     const candidateSeatMoves = new Map<string, string>();

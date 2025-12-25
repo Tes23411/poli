@@ -26,8 +26,7 @@ export interface GeoJsonFeature {
   geometry: GeoJsonGeometry;
 }
 
-export type Ethnicity = 'Malay' | 'Chinese' | 'Indian'| 'Others';
-
+export type Ethnicity = 'Malay' | 'Chinese' | 'Indian'| 'North Bornean natives' | 'Sarawak natives' | 'Others';
 export type AreaPreference = 'Urban' | 'Rural' | 'Both';
 
 export interface Ideology {
@@ -109,6 +108,8 @@ export interface Demographics {
   malayPercent: number;
   chinesePercent: number;
   indianPercent: number;
+  northBorneanNativesPercent: number;
+  sarawakNativesPercent: number;
   othersPercent: number;
   [key: string]: string | number;
 }

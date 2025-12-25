@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { Party, ElectionResults, Character, GameState, Bill, BillVoteTally, BillVoteBreakdown, VoteDirection, Government } from '../types';
 import { getPartySeatCounts } from '../utils/politics';
@@ -50,9 +49,9 @@ const ParliamentScreen: React.FC<ParliamentScreenProps> = ({
     const chiefMinister = government ? characters.find(c => c.id === government.chiefMinisterId) : null;
 
     // Horseshoe layout constants
-    const width = 350; // Reduced width
-    const height = 350; // Increased height to prevent overlap with bottom content
-    const seatSize = 5; // Reduced size
+    const width = 350; 
+    const height = 350; // Used for calculation base (center Y = 200)
+    const seatSize = 5; 
 
     // Define the 4 layers, from innermost to outermost
     const LAYERS = [
@@ -107,7 +106,11 @@ const ParliamentScreen: React.FC<ParliamentScreenProps> = ({
                 
                 {activeTab === 'seating' && (
                     <>
-                        <div className="relative mx-auto mb-6" style={{ width, height: 250 }}> {/* Explicit container height lower than calc height to push content down */}
+                        {/* Container Height adjusted to 340px to accommodate the U-shaped arc.
+                            Center Y is 200. Max Y radius is 110. 200 + 110 = 310px. 
+                            340px ensures no overlap with the legend below.
+                        */}
+                        <div className="relative mx-auto mb-2" style={{ width, height: 340 }}>
                             {seatDistribution.map((seat, index) => {
                                 const layerIndex = index % LAYERS.length;
                                 const seatIndexInLayer = Math.floor(index / LAYERS.length);
@@ -121,7 +124,7 @@ const ParliamentScreen: React.FC<ParliamentScreenProps> = ({
 
                                 const radian = angle * Math.PI / 180;
                                 const x = width / 2 + layer.radiusX * Math.cos(radian);
-                                const y = height - 150 + layer.radiusY * Math.sin(radian); // Adjusted Y center
+                                const y = height - 150 + layer.radiusY * Math.sin(radian); // Y center at 200px
 
                                 return (
                                     <div
@@ -140,15 +143,17 @@ const ParliamentScreen: React.FC<ParliamentScreenProps> = ({
                                     />
                                 );
                             })}
-                            <div className="absolute top-[200px] left-1/2 -translate-x-1/2 text-center">
-                                 <div className="w-16 h-10 bg-yellow-900 border-2 border-yellow-700 rounded-t-md flex items-center justify-center">
+                            
+                            {/* Adjusted Speaker position to 180px to sit clearly "inside" the arc opening */}
+                            <div className="absolute top-[180px] left-1/2 -translate-x-1/2 text-center">
+                                 <div className="w-16 h-10 bg-yellow-900 border-2 border-yellow-700 rounded-t-md flex items-center justify-center shadow-md">
                                    <span className="text-xs text-yellow-300 font-bold">Speaker</span>
                                 </div>
                                  <p className="text-xs mt-1 text-gray-300">{speaker?.name || 'Vacant'}</p>
                             </div>
                         </div>
                         
-                        <div className="flex justify-start flex-wrap gap-x-4 gap-y-2 mb-4">
+                        <div className="flex justify-start flex-wrap gap-x-4 gap-y-2 mb-4 px-2">
                              {(Array.from(partiesMap.values()) as Party[]).filter(p => seatDistribution.some(s => s.partyId === p.id)).map(party => (
                                 <div key={party.id} className="flex items-center space-x-2">
                                     <div className="w-3 h-3 rounded-sm" style={{backgroundColor: party.color}}></div>
@@ -157,7 +162,7 @@ const ParliamentScreen: React.FC<ParliamentScreenProps> = ({
                              ))}
                         </div>
                         
-                        <div className="bg-gray-700/50 p-3 rounded-lg mb-4 mt-4">
+                        <div className="bg-gray-700/50 p-3 rounded-lg mb-4 mt-2">
                              <h3 className="text-sm font-bold text-gray-300 mb-1">Government Status</h3>
                              {rulingCoalitionIds.length > 0 ? (
                                  <div>
