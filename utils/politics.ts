@@ -714,9 +714,19 @@ export const aiManagePartyContests = (
                  strongholdMap
              );
 
+             // FIX: Validate existing candidate
+             let validCandidateId = existingContest?.candidateId || null;
+             if (validCandidateId) {
+                 const candidate = allCharacters.find(c => c.id === validCandidateId);
+                 // If candidate is dead or no longer in this party (affiliation mismatch), remove them
+                 if (!candidate || !candidate.isAlive || !party.affiliationIds.includes(candidate.affiliationId)) {
+                     validCandidateId = null;
+                 }
+             }
+
              newContestedSeats.set(seatCode, { 
                 allocatedAffiliationId: bestAffiliationId, 
-                candidateId: existingContest?.candidateId || null 
+                candidateId: validCandidateId 
             });
         }
     });
@@ -761,6 +771,7 @@ export const aiSelectAffiliationCandidates = (
     return selections;
 };
 
+// 2. UPDATE aiFullElectionStrategy to add fallback candidates
 export const aiFullElectionStrategy = (
     party: Party,
     allCharacters: Character[],
@@ -783,6 +794,7 @@ export const aiFullElectionStrategy = (
 
     const partyAffiliations = party.affiliationIds.map(id => affiliationsMap.get(id)).filter((aff): aff is Affiliation => !!aff);
 
+    // Standard Allocation Pass
     for (const affiliation of partyAffiliations) {
         if (skipAffiliationIds.includes(affiliation.id)) continue;
         
@@ -796,31 +808,80 @@ export const aiFullElectionStrategy = (
 
         if (allocatedSeatsForAffiliation.length > 0) {
             const affiliationMembers = allCharacters.filter(c => c.affiliationId === affiliation.id && c.isAlive);
-            const selections = aiSelectAffiliationCandidates(
-                affiliationMembers,
-                allocatedSeatsForAffiliation,
-                demographicsMap,
-                affiliationsMap,
-                strongholdMap
-            );
+            
+            // Only select if there are members
+            if (affiliationMembers.length > 0) {
+                const selections = aiSelectAffiliationCandidates(
+                    affiliationMembers,
+                    allocatedSeatsForAffiliation,
+                    demographicsMap,
+                    affiliationsMap,
+                    strongholdMap
+                );
 
-            for (const [seatCode, candidateId] of selections.entries()) {
-                const currentData = newContestedSeats.get(seatCode);
-                if (currentData) {
-                    newContestedSeats.set(seatCode, { ...currentData, candidateId });
-                    
-                    const seatName = featuresMap.get(seatCode)?.properties.PARLIMEN || 'a constituency';
-                    historyUpdates.push({
-                        charId: candidateId,
-                        entry: {
-                            date: currentDate,
-                            event: `Selected as candidate for ${seatName}.`
+                for (const [seatCode, candidateId] of selections.entries()) {
+                    const currentData = newContestedSeats.get(seatCode);
+                    if (currentData) {
+                        newContestedSeats.set(seatCode, { ...currentData, candidateId });
+                        
+                        // Only add history if it's a new assignment
+                        if (party.contestedSeats.get(seatCode)?.candidateId !== candidateId) {
+                            const seatName = featuresMap.get(seatCode)?.properties.PARLIMEN || 'a constituency';
+                            historyUpdates.push({
+                                charId: candidateId,
+                                entry: {
+                                    date: currentDate,
+                                    event: `Selected as candidate for ${seatName}.`
+                                }
+                            });
                         }
-                    });
+                    }
                 }
             }
         }
     }
+
+    // FIX: Fallback Pass - Fill empty seats with ANY valid party member
+    const seatsNeedsCandidates = Array.from(newContestedSeats.entries())
+        .filter(([, data]) => !data.candidateId); // Find seats with no candidate
+
+    if (seatsNeedsCandidates.length > 0) {
+        // Find all members of the party regardless of specific affiliation
+        const allPartyMembers = allCharacters.filter(c => 
+            party.affiliationIds.includes(c.affiliationId) && c.isAlive
+        );
+
+        // Find who is already assigned
+        const assignedIds = new Set(
+            Array.from(newContestedSeats.values())
+                .map(d => d.candidateId)
+                .filter((id): id is string => !!id)
+        );
+
+        // Get available backup candidates
+        const availableBackups = allPartyMembers
+            .filter(c => !assignedIds.has(c.id))
+            .sort((a, b) => b.influence - a.influence); // Sort by influence
+
+        for (const [seatCode, data] of seatsNeedsCandidates) {
+            if (availableBackups.length === 0) break; // Truly out of candidates
+
+            const backupCandidate = availableBackups.shift(); // Take top available
+            if (backupCandidate) {
+                 newContestedSeats.set(seatCode, { ...data, candidateId: backupCandidate.id });
+                 
+                 const seatName = featuresMap.get(seatCode)?.properties.PARLIMEN || 'a constituency';
+                 historyUpdates.push({
+                    charId: backupCandidate.id,
+                    entry: {
+                        date: currentDate,
+                        event: `Drafted as emergency candidate for ${seatName}.`
+                    }
+                });
+            }
+        }
+    }
+
     const updatedParty = { ...partyWithAffiliationFocus, contestedSeats: newContestedSeats };
     return { updatedParty, historyUpdates };
 };
