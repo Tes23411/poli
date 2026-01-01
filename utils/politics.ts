@@ -1,6 +1,6 @@
-
 import { Character, Party, StatePartyBranch, GeoJsonFeature, Demographics, PartyElectionVoteTally, ElectionResults, SpeakerVoteTally, SpeakerVoteBreakdown, Bill, VoteDirection, Affiliation, CharacterHistoryEntry, Ethnicity, Government, Minister, VoteOfConfidenceResult, PoliticalAlliance, AllianceType, Ideology, GameEvent, StrongholdMap } from '../types';
 import { calculateEffectiveInfluence } from './influence';
+import {generateAllianceName} from './naming';
 import { COLOR_PALETTE } from '../constants';
 import { AFFILIATIONS } from '../affiliations';
 
@@ -233,7 +233,7 @@ export const formBigTentCoalition = (
     
     // Sort opposition by size/influence (using seats would be best, but unity/relations works for proxy)
     // Here we pick largest opposition to lead.
-    if (oppositionParties.length < 2) return null; // Need at least 2 to form a coalition
+    if (oppositionParties.length <= 2) return null; // Need at least 2 to form a coalition
 
     // Simply take all opposition parties
     const memberIds = oppositionParties.map(p => p.id);
@@ -241,7 +241,7 @@ export const formBigTentCoalition = (
 
     const alliance: PoliticalAlliance = {
         id: `big-tent-${Date.now()}`,
-        name: "The People's Front", // Generic Big Tent name
+        name: generateAllianceName(), // Generic Big Tent name
         memberPartyIds: memberIds,
         type: 'Alliance',
         leaderPartyId: leaderParty.id
@@ -274,53 +274,134 @@ const getAllianceAcceptanceChance = (initiator: Party, target: Party, type: Alli
     return Math.max(0, Math.min(1, chance));
 };
 
+const getAllianceIdeology = (alliance: PoliticalAlliance, parties: Party[]): Ideology => {
+    const members = parties.filter(p => alliance.memberPartyIds.includes(p.id));
+    if (members.length === 0) return { economic: 50, governance: 50 };
+    return calculateAverageIdeology(members.map(m => m.ideology));
+};
+
 export const attemptAllianceFormation = (
     initiatorParty: Party,
     targetParties: Party[],
     allianceName: string,
     type: AllianceType,
-    existingAlliances: PoliticalAlliance[]
-): { alliance: PoliticalAlliance | null, rejectedIds: string[] } => {
-    // Constraint: Initiator cannot form a new alliance if already in one
-    if (existingAlliances.some(a => a.memberPartyIds.includes(initiatorParty.id))) {
-        console.log("Alliance Formation Blocked: Initiator is already in an alliance.");
-        return { alliance: null, rejectedIds: targetParties.map(p => p.id) };
+    existingAlliances: PoliticalAlliance[],
+    context?: {
+        allParties: Party[],
+        allSeatCodes: string[],
+        featuresMap: Map<string, GeoJsonFeature>,
+        demographicsMap: Map<string, Demographics>,
+        affiliationsMap: Map<string, Affiliation>,
+        characters: Character[],
+        strongholdMap: StrongholdMap
+    }
+): { alliance: PoliticalAlliance | null, updatedParties: Party[], rejectedIds: string[] } => {
+    
+    // 1. Determine base alliance (New or Existing/Expansion)
+    let activeAlliance: PoliticalAlliance | null = existingAlliances.find(a => a.memberPartyIds.includes(initiatorParty.id)) || null;
+    let baseIdeology = initiatorParty.ideology;
+    let allianceMembers: Party[] = [initiatorParty];
+
+    if (activeAlliance && context) {
+         // Expanding existing alliance
+         allianceMembers = context.allParties.filter(p => activeAlliance!.memberPartyIds.includes(p.id));
+         baseIdeology = getAllianceIdeology(activeAlliance, context.allParties);
+    } else if (activeAlliance) {
+         // Fallback if context missing
+         baseIdeology = initiatorParty.ideology; 
     }
 
-    const acceptedIds: string[] = [initiatorParty.id];
+    const acceptedParties: Party[] = [];
     const rejectedIds: string[] = [];
 
-    targetParties.forEach(target => {
-        // Constraint: Target cannot be in an alliance
-        if (existingAlliances.some(a => a.memberPartyIds.includes(target.id))) {
-             rejectedIds.push(target.id);
-             return;
+    // 2. Evaluate Targets
+    for (const target of targetParties) {
+        // Skip if target is already in THIS alliance
+        if (activeAlliance && activeAlliance.memberPartyIds.includes(target.id)) continue;
+        
+        // Skip if target is in ANOTHER alliance
+        if (existingAlliances.some(a => a.memberPartyIds.includes(target.id) && a.id !== activeAlliance?.id)) {
+            rejectedIds.push(target.id);
+            continue;
         }
 
-        const acceptanceChance = getAllianceAcceptanceChance(initiatorParty, target, type);
-        console.log(`Alliance Proposal: ${initiatorParty.name} -> ${target.name} (${type}). Chance: ${acceptanceChance.toFixed(2)}`);
+        // --- Ideology Check (Main Factor) ---
+        const dist = Math.sqrt(
+            Math.pow(target.ideology.economic - baseIdeology.economic, 2) + 
+            Math.pow(target.ideology.governance - baseIdeology.governance, 2)
+        );
+
+        // Strict threshold: Ideological distance > 35 is rejected
+        let ideologyChance = Math.max(0, 1 - (dist / 35)); 
         
-        if (Math.random() < acceptanceChance) {
-            acceptedIds.push(target.id);
+        // --- Relation Check ---
+        let avgRel = 0;
+        allianceMembers.forEach(m => {
+            avgRel += (m.relations.get(target.id) || 50);
+        });
+        avgRel /= allianceMembers.length;
+        
+        const relationChance = avgRel / 100;
+
+        // Combined Chance: 70% Ideology, 30% Relations
+        const finalChance = (ideologyChance * 0.7) + (relationChance * 0.3);
+        
+        // Bonus for "Pact" vs "Alliance"
+        const modifier = type === 'Pact' ? 0.1 : 0;
+
+        if (Math.random() < (finalChance + modifier) && finalChance > 0.3) {
+            acceptedParties.push(target);
         } else {
             rejectedIds.push(target.id);
         }
-    });
-
-    if (acceptedIds.length > 1) {
-        return {
-            alliance: {
-                id: `alliance-${Date.now()}`,
-                name: allianceName,
-                memberPartyIds: acceptedIds,
-                type: type,
-                leaderPartyId: initiatorParty.id
-            },
-            rejectedIds
-        };
     }
 
-    return { alliance: null, rejectedIds: targetParties.map(p => p.id) };
+    if (acceptedParties.length === 0) {
+        return { alliance: activeAlliance, updatedParties: [], rejectedIds: targetParties.map(p => p.id) };
+    }
+
+    // 3. Form or Update Alliance
+    let finalAlliance: PoliticalAlliance;
+    
+    if (activeAlliance) {
+        finalAlliance = {
+            ...activeAlliance,
+            memberPartyIds: [...activeAlliance.memberPartyIds, ...acceptedParties.map(p => p.id)]
+        };
+        console.log(`Alliance Expanded: ${finalAlliance.name} added ${acceptedParties.map(p=>p.name).join(', ')}`);
+    } else {
+        finalAlliance = {
+            id: `alliance-${Date.now()}`,
+            name: allianceName,
+            memberPartyIds: [initiatorParty.id, ...acceptedParties.map(p => p.id)],
+            type: type,
+            leaderPartyId: initiatorParty.id
+        };
+        console.log(`New Alliance Formed: ${finalAlliance.name} with ${finalAlliance.memberPartyIds.length} members`);
+    }
+
+    // 4. Redistribute Seats (Re-attempt by AI)
+    let updatedParties: Party[] = [];
+    
+    if (context) {
+        const allMemberParties = [...allianceMembers, ...acceptedParties];
+        // Ensure uniqueness and get full Party objects
+        const uniqueMembers = Array.from(new Set(allMemberParties.map(p => p.id)))
+            .map(id => allMemberParties.find(p => p.id === id)!);
+
+        updatedParties = distributeAllianceSeats(
+            finalAlliance,
+            uniqueMembers,
+            context.allSeatCodes,
+            context.demographicsMap,
+            context.featuresMap,
+            context.affiliationsMap,
+            context.characters,
+            context.strongholdMap
+        );
+    }
+
+    return { alliance: finalAlliance, updatedParties, rejectedIds };
 };
 
 export const getCoalitionAcceptanceChance = (initiator: Party, target: Party, existingCoalitionMembers: Party[]): number => {
@@ -771,7 +852,6 @@ export const aiSelectAffiliationCandidates = (
     return selections;
 };
 
-// 2. UPDATE aiFullElectionStrategy to add fallback candidates
 export const aiFullElectionStrategy = (
     party: Party,
     allCharacters: Character[],
@@ -794,7 +874,6 @@ export const aiFullElectionStrategy = (
 
     const partyAffiliations = party.affiliationIds.map(id => affiliationsMap.get(id)).filter((aff): aff is Affiliation => !!aff);
 
-    // Standard Allocation Pass
     for (const affiliation of partyAffiliations) {
         if (skipAffiliationIds.includes(affiliation.id)) continue;
         
@@ -809,7 +888,6 @@ export const aiFullElectionStrategy = (
         if (allocatedSeatsForAffiliation.length > 0) {
             const affiliationMembers = allCharacters.filter(c => c.affiliationId === affiliation.id && c.isAlive);
             
-            // Only select if there are members
             if (affiliationMembers.length > 0) {
                 const selections = aiSelectAffiliationCandidates(
                     affiliationMembers,
@@ -824,7 +902,6 @@ export const aiFullElectionStrategy = (
                     if (currentData) {
                         newContestedSeats.set(seatCode, { ...currentData, candidateId });
                         
-                        // Only add history if it's a new assignment
                         if (party.contestedSeats.get(seatCode)?.candidateId !== candidateId) {
                             const seatName = featuresMap.get(seatCode)?.properties.PARLIMEN || 'a constituency';
                             historyUpdates.push({
@@ -840,43 +917,24 @@ export const aiFullElectionStrategy = (
             }
         }
     }
-
-    // FIX: Fallback Pass - Fill empty seats with ANY valid party member
+    // Fallback Pass: Fill empty seats with any party member
     const seatsNeedsCandidates = Array.from(newContestedSeats.entries())
-        .filter(([, data]) => !data.candidateId); // Find seats with no candidate
+        .filter(([, data]) => !data.candidateId);
 
     if (seatsNeedsCandidates.length > 0) {
-        // Find all members of the party regardless of specific affiliation
-        const allPartyMembers = allCharacters.filter(c => 
-            party.affiliationIds.includes(c.affiliationId) && c.isAlive
-        );
-
-        // Find who is already assigned
-        const assignedIds = new Set(
-            Array.from(newContestedSeats.values())
-                .map(d => d.candidateId)
-                .filter((id): id is string => !!id)
-        );
-
-        // Get available backup candidates
-        const availableBackups = allPartyMembers
-            .filter(c => !assignedIds.has(c.id))
-            .sort((a, b) => b.influence - a.influence); // Sort by influence
+        const allPartyMembers = allCharacters.filter(c => party.affiliationIds.includes(c.affiliationId) && c.isAlive);
+        const assignedIds = new Set(Array.from(newContestedSeats.values()).map(d => d.candidateId).filter(Boolean));
+        const availableBackups = allPartyMembers.filter(c => !assignedIds.has(c.id)).sort((a, b) => b.influence - a.influence);
 
         for (const [seatCode, data] of seatsNeedsCandidates) {
-            if (availableBackups.length === 0) break; // Truly out of candidates
-
-            const backupCandidate = availableBackups.shift(); // Take top available
+            if (availableBackups.length === 0) break;
+            const backupCandidate = availableBackups.shift();
             if (backupCandidate) {
                  newContestedSeats.set(seatCode, { ...data, candidateId: backupCandidate.id });
-                 
                  const seatName = featuresMap.get(seatCode)?.properties.PARLIMEN || 'a constituency';
                  historyUpdates.push({
                     charId: backupCandidate.id,
-                    entry: {
-                        date: currentDate,
-                        event: `Drafted as emergency candidate for ${seatName}.`
-                    }
+                    entry: { date: currentDate, event: `Drafted as emergency candidate for ${seatName}.` }
                 });
             }
         }

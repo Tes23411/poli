@@ -114,9 +114,12 @@ export const PARTIES: Party[] = [
   { id: 'mic', name: 'MIC', color: COLOR_PALETTE[4], affiliationIds: ['indian-trad', 'indian-reform'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'Indian', relations: new Map(), unity: 80, ideology: { economic: 45, governance: 55 } },
   { id: 'pmip', name: 'PMIP', color: COLOR_PALETTE[1], affiliationIds: ['malay-islamist','malay-intel'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'Malay', relations: new Map(), unity: 95, ideology: { economic: 35, governance: 85 } },
   { id: 'pr', name: 'Parti Rakyat', color: COLOR_PALETTE[17], affiliationIds: ['malay-socialist','malay-labour'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'Malay', relations: new Map(), unity: 70, ideology: { economic: 20, governance: 50 }  },
-  { id: 'labour', name: 'Labour Party', color: COLOR_PALETTE[9], affiliationIds: ['chinese-labour', 'chinese-intel'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], relations: new Map(), unity: 75, ideology: { economic: 20, governance: 30 } },
+  { id: 'labour', name: 'Labour Party', color: COLOR_PALETTE[9], affiliationIds: ['chinese-labour', 'chinese-intel'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [],ethnicityFocus: 'Chinese', relations: new Map(), unity: 75, ideology: { economic: 20, governance: 30 } },
   { id: 'sna', name: 'Sabah National Party', color: COLOR_PALETTE[20], affiliationIds: ['nb-chiefs', 'nb-mission','nb-interior','nb-civil',], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'North Bornean natives', relations: new Map(), unity: 90, ideology: { economic: 50, governance: 75 } },
   { id: 'spp', name: 'Sarawak People Party', color: COLOR_PALETTE[24], affiliationIds: ['swk-longhouse','swk-upriver','swk-officers','swk-mission'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'Sarawak natives', relations: new Map(), unity: 90, ideology: { economic: 50, governance: 75 } },
+  { id: 'sla', name: 'Sabah Liberal Party', color: COLOR_PALETTE[27], affiliationIds: ['nb-urban-traders', 'nb-gatherers'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'North Bornean natives', relations: new Map(), unity: 90, ideology: { economic: 50, governance: 75 } },
+  { id: 'sdp', name: 'Sarawak Democratic Party', color: COLOR_PALETTE[14], affiliationIds: ['swk-church','swk-border','swk-students'], deputyLeaderId: undefined, stateBranches: [], contestedSeats: new Map(), leaderHistory: [], ethnicityFocus: 'Sarawak natives', relations: new Map(), unity: 90, ideology: { economic: 50, governance: 75 } },
+
 
 ];
 
@@ -127,6 +130,13 @@ export const INITIAL_ALLIANCES: PoliticalAlliance[] = [
         memberPartyIds: ['umno', 'mca', 'mic','sna','spp'],
         type: 'Alliance',
         leaderPartyId: 'umno'
+    },
+        {
+        id: 'socialist',
+        name: 'Socialist Front',
+        memberPartyIds: ['labour', 'pr', 'sla','sdp','pmip','umno'],
+        type: 'Pact',
+        leaderPartyId: 'pmip'
     }
 ];
 
